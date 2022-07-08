@@ -3,6 +3,7 @@ package autobind
 import (
 	"context"
 	"reflect"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -15,16 +16,36 @@ const (
 	EnvTag   = "env"
 )
 
+type Autobinder struct {
+	configObject interface{}
+	vp           *viper.Viper
+	UsePrefix    bool
+}
+
 func AutoBind(vp *viper.Viper, cfg interface{}) func(cmd *cobra.Command, args []string) error {
+	binder := &Autobinder{
+		configObject: cfg,
+		vp:           vp,
+		UsePrefix:    true,
+	}
+
 	return func(cmd *cobra.Command, args []string) error {
-		autoBind(cmd.Context(), cmd, vp, cfg)
+		binder.Bind(cmd.Context(), cmd, []string{})
 		return nil
 	}
 }
 
-func autoBind(ctx context.Context, cmd *cobra.Command, vp *viper.Viper, cfg interface{}) {
+func (b *Autobinder) sub(subConfig interface{}) *Autobinder {
+	return &Autobinder{
+		configObject: subConfig,
+		vp:           b.vp,
+		UsePrefix:    b.UsePrefix,
+	}
+}
+
+func (b *Autobinder) Bind(ctx context.Context, cmd *cobra.Command, prefix []string) {
 	log := log.Ctx(ctx)
-	pv := reflect.ValueOf(cfg)
+	pv := reflect.ValueOf(b.configObject)
 	v := pv
 	pt := v.Type()
 	t := pt
@@ -42,36 +63,44 @@ func autoBind(ctx context.Context, cmd *cobra.Command, vp *viper.Viper, cfg inte
 		f := v.Field(i)
 		ft := t.Field(i)
 
-		// If the field is a struct, go deeper
-		if ft.Type.Kind() == reflect.Struct {
-			autoBind(ctx, cmd, vp, f.Addr().Interface())
-			continue
-		}
-
 		vip := ft.Tag.Get(ViperTag)
 		pflg := ft.Tag.Get(CobraTag)
 		env := ft.Tag.Get(EnvTag)
+
+		vipWithPrefix := strings.Join(append(prefix, vip), "_")
+
+		// If the field is a struct, go deeper
+		if ft.Type.Kind() == reflect.Struct {
+			if b.UsePrefix {
+				b.sub(f.Addr().Interface()).Bind(ctx, cmd, append(prefix, vip))
+			} else {
+				b.sub(f.Addr().Interface()).Bind(ctx, cmd, []string{})
+			}
+			continue
+		}
 
 		if vip == "" {
 			continue
 		}
 
 		if env != "" {
-			logger.Trace().Str("env", env).Msg("Binding env")
-			vp.BindEnv(vip, env) //nolint:errcheck
+			envWithPrefix := strings.Join(append(prefix, env), "_")
+
+			logger.Trace().Str("env", envWithPrefix).Msg("Binding env")
+			b.vp.BindEnv(vipWithPrefix, envWithPrefix) //nolint:errcheck
 		}
 
 		if pflg != "" && cmd.Flags().Lookup(pflg) != nil {
-			logger.Trace().Str("pflag", pflg).Msg("Binding env")
-			vp.BindPFlag(vip, cmd.Flags().Lookup(pflg)) //nolint:errcheck
+			logger.Trace().Str("pflag", pflg).Msg("Binding pflag")
+			b.vp.BindPFlag(vipWithPrefix, cmd.Flags().Lookup(pflg)) //nolint:errcheck
 		}
 
 		if f.CanSet() {
-			s := vp.GetString(vip)
+			s := b.vp.GetString(vipWithPrefix)
 			logger.Debug().Str("value", s).Msg("Setting value")
-			f.Set(reflect.ValueOf(vp.GetString(vip)))
+			f.Set(reflect.ValueOf(s))
 		}
 	}
 
-	log.Info().Interface("config", cfg).Msg("Bound configuration")
+	log.Info().Interface("config", b.configObject).Msg("Bound configuration")
 }
