@@ -101,8 +101,10 @@ func (b *Autobinder) Bind(ctx context.Context, cmd *cobra.Command, prefix []stri
 
 		if f.CanSet() {
 			s := b.Viper.Get(nestedViperKey)
-			logger.Debug().Interface("value", s).Msg("Setting value")
-			f.Set(reflect.ValueOf(s))
+			if s != nil {
+				logger.Debug().Interface("value", s).Msg("Setting value")
+				f.Set(reflect.ValueOf(s))
+			}
 		}
 	}
 
