@@ -23,8 +23,8 @@ func TestShouldDeepAutobind(t *testing.T) {
 	viper.Set("nested.value", 1)
 
 	autobinder := &Autobinder{
-		configObject: &config,
-		vp:           viper,
+		ConfigObject: &config,
+		Viper:        viper,
 		UseNesting:   true,
 	}
 
@@ -55,8 +55,8 @@ nested:
 	assert.NoError(t, viper.ReadInConfig())
 
 	autobinder := &Autobinder{
-		configObject: &config,
-		vp:           viper,
+		ConfigObject: &config,
+		Viper:        viper,
 		UseNesting:   true,
 	}
 

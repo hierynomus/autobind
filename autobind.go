@@ -17,16 +17,16 @@ const (
 )
 
 type Autobinder struct {
-	configObject interface{}
-	vp           *viper.Viper
+	ConfigObject interface{}
+	Viper        *viper.Viper
 	UseNesting   bool
 	EnvPrefix    string // Viper prefix for environment variables, viper does not expose this, and because we construct the ENV variables, the prefix isn't set by Viper.
 }
 
 func AutoBind(vp *viper.Viper, cfg interface{}) func(cmd *cobra.Command, args []string) error {
 	binder := &Autobinder{
-		configObject: cfg,
-		vp:           vp,
+		ConfigObject: cfg,
+		Viper:        vp,
 		UseNesting:   true,
 	}
 
@@ -38,15 +38,15 @@ func AutoBind(vp *viper.Viper, cfg interface{}) func(cmd *cobra.Command, args []
 
 func (b *Autobinder) sub(subConfig interface{}) *Autobinder {
 	return &Autobinder{
-		configObject: subConfig,
-		vp:           b.vp,
+		ConfigObject: subConfig,
+		Viper:        b.Viper,
 		UseNesting:   b.UseNesting,
 	}
 }
 
 func (b *Autobinder) Bind(ctx context.Context, cmd *cobra.Command, prefix []string) {
 	log := log.Ctx(ctx)
-	pv := reflect.ValueOf(b.configObject)
+	pv := reflect.ValueOf(b.ConfigObject)
 	v := pv
 	pt := v.Type()
 	t := pt
@@ -91,20 +91,20 @@ func (b *Autobinder) Bind(ctx context.Context, cmd *cobra.Command, prefix []stri
 			}
 
 			logger.Trace().Str("env", nestedEnvKey).Msg("Binding env")
-			b.vp.BindEnv(nestedViperKey, nestedEnvKey) //nolint:errcheck
+			b.Viper.BindEnv(nestedViperKey, nestedEnvKey) //nolint:errcheck
 		}
 
 		if pflg != "" && cmd.Flags().Lookup(pflg) != nil {
 			logger.Trace().Str("pflag", pflg).Msg("Binding pflag")
-			b.vp.BindPFlag(nestedViperKey, cmd.Flags().Lookup(pflg)) //nolint:errcheck
+			b.Viper.BindPFlag(nestedViperKey, cmd.Flags().Lookup(pflg)) //nolint:errcheck
 		}
 
 		if f.CanSet() {
-			s := b.vp.Get(nestedViperKey)
+			s := b.Viper.Get(nestedViperKey)
 			logger.Debug().Interface("value", s).Msg("Setting value")
 			f.Set(reflect.ValueOf(s))
 		}
 	}
 
-	log.Info().Interface("config", b.configObject).Msg("Bound configuration")
+	log.Info().Interface("config", b.ConfigObject).Msg("Bound configuration")
 }
