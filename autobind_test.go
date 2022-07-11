@@ -65,3 +65,23 @@ nested:
 	assert.Equal(t, "test", config.Name)
 	assert.Equal(t, 1, config.Nested.Value)
 }
+
+func TestShouldSetDefaults(t *testing.T) {
+	type Config struct {
+		Name string `viper:"name" default:"test"`
+	}
+
+	config := Config{}
+	viper := viper.New()
+
+	autobinder := &Autobinder{
+		ConfigObject: &config,
+		Viper:        viper,
+		UseNesting:   true,
+		SetDefaults:  true,
+	}
+
+	autobinder.Bind(context.Background(), nil, []string{})
+
+	assert.Equal(t, "test", config.Name)
+}

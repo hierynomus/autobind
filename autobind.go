@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/creasty/defaults"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -21,6 +22,7 @@ type Autobinder struct {
 	Viper        *viper.Viper
 	UseNesting   bool
 	EnvPrefix    string // Viper prefix for environment variables, viper does not expose this, and because we construct the ENV variables, the prefix isn't set by Viper.
+	SetDefaults  bool   // Set default values for Viper keys that are not set
 }
 
 func AutoBind(vp *viper.Viper, cfg interface{}) func(cmd *cobra.Command, args []string) error {
@@ -41,11 +43,19 @@ func (b *Autobinder) sub(subConfig interface{}) *Autobinder {
 		ConfigObject: subConfig,
 		Viper:        b.Viper,
 		UseNesting:   b.UseNesting,
+		SetDefaults:  false, // All defaults are set from the top
 	}
 }
 
 func (b *Autobinder) Bind(ctx context.Context, cmd *cobra.Command, prefix []string) {
 	log := log.Ctx(ctx)
+
+	if b.SetDefaults {
+		if err := defaults.Set(b.ConfigObject); err != nil {
+			panic(err)
+		}
+	}
+
 	pv := reflect.ValueOf(b.ConfigObject)
 	v := pv
 	pt := v.Type()
