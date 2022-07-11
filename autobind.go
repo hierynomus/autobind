@@ -19,14 +19,15 @@ const (
 type Autobinder struct {
 	configObject interface{}
 	vp           *viper.Viper
-	UsePrefix    bool
+	UseNesting   bool
+	EnvPrefix    string // Viper prefix for environment variables, viper does not expose this, and because we construct the ENV variables, the prefix isn't set by Viper.
 }
 
 func AutoBind(vp *viper.Viper, cfg interface{}) func(cmd *cobra.Command, args []string) error {
 	binder := &Autobinder{
 		configObject: cfg,
 		vp:           vp,
-		UsePrefix:    true,
+		UseNesting:   true,
 	}
 
 	return func(cmd *cobra.Command, args []string) error {
@@ -39,7 +40,7 @@ func (b *Autobinder) sub(subConfig interface{}) *Autobinder {
 	return &Autobinder{
 		configObject: subConfig,
 		vp:           b.vp,
-		UsePrefix:    b.UsePrefix,
+		UseNesting:   b.UseNesting,
 	}
 }
 
@@ -67,11 +68,11 @@ func (b *Autobinder) Bind(ctx context.Context, cmd *cobra.Command, prefix []stri
 		pflg := ft.Tag.Get(CobraTag)
 		env := ft.Tag.Get(EnvTag)
 
-		vipWithPrefix := strings.Join(append(prefix, vip), "_")
+		nestedViperKey := strings.Join(append(prefix, vip), ".")
 
 		// If the field is a struct, go deeper
 		if ft.Type.Kind() == reflect.Struct {
-			if b.UsePrefix {
+			if b.UseNesting {
 				b.sub(f.Addr().Interface()).Bind(ctx, cmd, append(prefix, vip))
 			} else {
 				b.sub(f.Addr().Interface()).Bind(ctx, cmd, []string{})
@@ -84,20 +85,23 @@ func (b *Autobinder) Bind(ctx context.Context, cmd *cobra.Command, prefix []stri
 		}
 
 		if env != "" {
-			envWithPrefix := strings.Join(append(prefix, env), "_")
+			nestedEnvKey := strings.Join(append(prefix, env), "_")
+			if b.EnvPrefix != "" {
+				nestedEnvKey = strings.ToUpper(b.EnvPrefix + "_" + nestedEnvKey)
+			}
 
-			logger.Trace().Str("env", envWithPrefix).Msg("Binding env")
-			b.vp.BindEnv(vipWithPrefix, envWithPrefix) //nolint:errcheck
+			logger.Trace().Str("env", nestedEnvKey).Msg("Binding env")
+			b.vp.BindEnv(nestedViperKey, nestedEnvKey) //nolint:errcheck
 		}
 
 		if pflg != "" && cmd.Flags().Lookup(pflg) != nil {
 			logger.Trace().Str("pflag", pflg).Msg("Binding pflag")
-			b.vp.BindPFlag(vipWithPrefix, cmd.Flags().Lookup(pflg)) //nolint:errcheck
+			b.vp.BindPFlag(nestedViperKey, cmd.Flags().Lookup(pflg)) //nolint:errcheck
 		}
 
 		if f.CanSet() {
-			s := b.vp.GetString(vipWithPrefix)
-			logger.Debug().Str("value", s).Msg("Setting value")
+			s := b.vp.Get(nestedViperKey)
+			logger.Debug().Interface("value", s).Msg("Setting value")
 			f.Set(reflect.ValueOf(s))
 		}
 	}
