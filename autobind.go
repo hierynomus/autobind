@@ -23,15 +23,19 @@ type Autobinder struct {
 	ConfigObject interface{}
 	Viper        *viper.Viper
 	UseNesting   bool
-	EnvPrefix    string // Viper prefix for environment variables, viper does not expose this, and because we construct the ENV variables, the prefix isn't set by Viper.
-	SetDefaults  bool   // Set default values for Viper keys that are not set
+	EnvPrefix    string            // Viper prefix for environment variables, viper does not expose this, and because we construct the ENV variables, the prefix isn't set by Viper.
+	SetDefaults  bool              // Set default values for Viper keys that are not set
+	Casters      map[string]Caster // Custom casters
 }
+
+type Caster func(interface{}) interface{}
 
 func AutoBind(vp *viper.Viper, cfg interface{}) func(cmd *cobra.Command, args []string) error {
 	binder := &Autobinder{
 		ConfigObject: cfg,
 		Viper:        vp,
 		UseNesting:   true,
+		Casters:      make(map[string]Caster),
 	}
 
 	return func(cmd *cobra.Command, args []string) error {
@@ -40,12 +44,21 @@ func AutoBind(vp *viper.Viper, cfg interface{}) func(cmd *cobra.Command, args []
 	}
 }
 
+func (b *Autobinder) Cast(key string, caster Caster) {
+	if b.Casters == nil {
+		b.Casters = make(map[string]Caster)
+	}
+
+	b.Casters[key] = caster
+}
+
 func (b *Autobinder) sub(subConfig interface{}) *Autobinder {
 	return &Autobinder{
 		ConfigObject: subConfig,
 		Viper:        b.Viper,
 		UseNesting:   b.UseNesting,
 		SetDefaults:  false, // All defaults are set from the top
+		Casters:      b.Casters,
 	}
 }
 
@@ -115,7 +128,11 @@ func (b *Autobinder) Bind(ctx context.Context, cmd *cobra.Command, prefix []stri
 			s := b.Viper.Get(nestedViperKey)
 			if s != nil {
 				logger.Debug().Interface("value", s).Msg("Setting value")
-				f.Set(reflect.ValueOf(autocast(f, s)))
+				if caster, ok := b.Casters[nestedViperKey]; ok {
+					s = caster(s)
+				}
+				c := autocast(f, s)
+				f.Set(reflect.ValueOf(c))
 			}
 		}
 	}
@@ -149,6 +166,8 @@ func autocast(f reflect.Value, v interface{}) interface{} {
 		return cast.ToStringSlice(v)
 	case []int:
 		return cast.ToIntSlice(v)
+	case []interface{}:
+		return cast.ToSlice(v)
 	default:
 		return v
 	}

@@ -2,7 +2,7 @@ package autobind
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
@@ -44,7 +44,7 @@ func TestShouldAutobindFromConfig(t *testing.T) {
 	}
 
 	d := t.TempDir()
-	assert.NoError(t, ioutil.WriteFile(d+"/config.yaml", []byte(`
+	assert.NoError(t, os.WriteFile(d+"/config.yaml", []byte(`
 name: test
 nested:
   value: 1
@@ -105,4 +105,47 @@ func TestShouldBindDuration(t *testing.T) {
 	autobinder.Bind(context.Background(), nil, []string{})
 
 	assert.Equal(t, time.Second, config.Duration)
+}
+
+func TestShouldBindSliceOfSomething(t *testing.T) {
+	type Something struct {
+		Value string `viper:"value"`
+	}
+
+	type Config struct {
+		Slice []Something `viper:"slice"`
+	}
+
+	d := t.TempDir()
+	assert.NoError(t, os.WriteFile(d+"/config.yaml", []byte(`
+slice:
+  - value: test
+`), 0600))
+
+	config := Config{}
+	viper := viper.New()
+	viper.SetConfigFile(d + "/config.yaml")
+	assert.NoError(t, viper.ReadInConfig())
+
+	autobinder := &Autobinder{
+		ConfigObject: &config,
+		Viper:        viper,
+		UseNesting:   true,
+		Casters:      map[string]Caster{},
+	}
+
+	autobinder.Cast("slice", func(v interface{}) interface{} {
+		arr := make([]Something, len(v.([]interface{})))
+		for i, item := range v.([]interface{}) {
+			arr[i] = Something{
+				Value: item.(map[string]interface{})["value"].(string),
+			}
+		}
+		return arr
+	})
+
+	autobinder.Bind(context.Background(), nil, []string{})
+
+	assert.Equal(t, 1, len(config.Slice))
+	assert.Equal(t, "test", config.Slice[0].Value)
 }
