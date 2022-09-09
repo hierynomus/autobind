@@ -4,6 +4,7 @@ import (
 	"context"
 	"io/ioutil"
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -84,4 +85,24 @@ func TestShouldSetDefaults(t *testing.T) {
 	autobinder.Bind(context.Background(), nil, []string{})
 
 	assert.Equal(t, "test", config.Name)
+}
+
+func TestShouldBindDuration(t *testing.T) {
+	type Config struct {
+		Duration time.Duration `viper:"duration"`
+	}
+
+	config := Config{}
+	viper := viper.New()
+	viper.Set("duration", "1s")
+
+	autobinder := &Autobinder{
+		ConfigObject: &config,
+		Viper:        viper,
+		UseNesting:   true,
+	}
+
+	autobinder.Bind(context.Background(), nil, []string{})
+
+	assert.Equal(t, time.Second, config.Duration)
 }

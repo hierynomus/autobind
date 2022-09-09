@@ -4,9 +4,11 @@ import (
 	"context"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/creasty/defaults"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -113,10 +115,41 @@ func (b *Autobinder) Bind(ctx context.Context, cmd *cobra.Command, prefix []stri
 			s := b.Viper.Get(nestedViperKey)
 			if s != nil {
 				logger.Debug().Interface("value", s).Msg("Setting value")
-				f.Set(reflect.ValueOf(s))
+				f.Set(reflect.ValueOf(autocast(f, s)))
 			}
 		}
 	}
 
 	log.Info().Interface("config", b.ConfigObject).Msg("Bound configuration")
+}
+
+func autocast(f reflect.Value, v interface{}) interface{} {
+	switch f.Interface().(type) {
+	case bool:
+		return cast.ToBool(v)
+	case string:
+		return cast.ToString(v)
+	case int32, int16, int8, int:
+		return cast.ToInt(v)
+	case uint:
+		return cast.ToUint(v)
+	case uint32:
+		return cast.ToUint32(v)
+	case uint64:
+		return cast.ToUint64(v)
+	case int64:
+		return cast.ToInt64(v)
+	case float64, float32:
+		return cast.ToFloat64(v)
+	case time.Time:
+		return cast.ToTime(v)
+	case time.Duration:
+		return cast.ToDuration(v)
+	case []string:
+		return cast.ToStringSlice(v)
+	case []int:
+		return cast.ToIntSlice(v)
+	default:
+		return v
+	}
 }
