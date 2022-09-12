@@ -1,0 +1,87 @@
+= README for Autobind
+Author <jeroen@hierynomus.com>
+:source-highlighter: pygments
+
+[![GoDoc](https://godoc.org/github.com/hierynomus/autobind?status.svg)](https://godoc.org/github.com/hierynomus/autobind)
+
+Autobind is a library that can use Golang struct annotations to automatically bind Viper and Cobra flags to struct fields.
+
+It is inspired by the excellent work of @spf13 on Viper and Cobra.
+
+Installation
+------------
+
+Installing Autobind is as simple as running:
+
+[source,sh]
+----
+go get github.com/hierynomus/autobind
+----
+
+Usage
+-----
+
+[source,go]
+----
+    package main
+
+    import (
+        "github.com/hierynomus/autobind"
+        "github.com/spf13/cobra"
+        "github.com/spf13/viper"
+    )
+
+    type Config struct {
+        Host string `cobra:"host" env:"HOST" viper:"host" default:"localhost"`
+        Port int    `cobra:"port" env:"PORT" viper:"port" default:"8080"`
+    }
+
+    func main() {
+        var config Config
+
+        vp := viper.New()
+        vp.SetConfigName("config")
+        vp.AddConfigPath(".")
+        vp.SetConfigType("yaml")
+        if err := vp.ReadInConfig(); err != nil {
+            if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+                logger.Warn().Msg("No config file found... Continuing with defaults")
+                // Config file not found; ignore error if desired
+            } else {
+                fmt.Printf("%s", err)
+                os.Exit(1)
+            }
+        }
+
+        cmd := &cobra.Command{
+            Run: func(cmd *cobra.Command, args []string) {
+                // Do something with config
+            },
+        }
+
+        binder := &autobind.Autobinder{
+            ConfigObject: &config,
+            Viper: vp,
+            EnvPrefix: "MYAPP",
+        }
+
+        binder.Bind(context.Background(), cmd, []string{})
+
+        cmd.Execute()
+    }
+----
+
+Configuration
+-------------
+
+The following items can be set on the `Autobind` struct:
+
+[options="header"]
+|=====================
+| Name | Description
+| `ConfigObject` | The (pointer to the) struct that should be bound to the flags and environment variables.
+| `Viper` | The instantiated Viper instace.
+| `UseNesting` | Whether to use nested keys in Viper if encountering a sub-struct in the config object.
+| `EnvPrefix` | The prefix to use for environment variables.
+| `SetDefaults` | Whether to set the default values on config object.
+| `Casters` | A map of custom cast functions to use for specific types.
