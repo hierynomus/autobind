@@ -57,6 +57,7 @@ func (b *Autobinder) sub(subConfig interface{}) *Autobinder {
 		ConfigObject: subConfig,
 		Viper:        b.Viper,
 		UseNesting:   b.UseNesting,
+		EnvPrefix:    b.EnvPrefix,
 		SetDefaults:  false, // All defaults are set from the top
 		Casters:      b.Casters,
 	}
