@@ -99,7 +99,11 @@ func (b *Autobinder) Bind(ctx context.Context, cmd *cobra.Command, prefix []stri
 		// If the field is a struct, go deeper
 		if ft.Type.Kind() == reflect.Struct {
 			if b.UseNesting {
-				b.sub(f.Addr().Interface()).Bind(ctx, cmd, append(prefix, vip))
+				if vip != "" {
+					prefix = append(prefix, vip)
+				}
+
+				b.sub(f.Addr().Interface()).Bind(ctx, cmd, prefix)
 			} else {
 				b.sub(f.Addr().Interface()).Bind(ctx, cmd, []string{})
 			}
